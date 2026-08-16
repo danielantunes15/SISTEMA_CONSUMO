@@ -2,7 +2,63 @@ window.driversModule = (function() {
     let drivers = [];
     let editingId = null;
 
+    // Função poderosa para padronizar nomes (remove acentos, espaços extras e deixa tudo maiúsculo)
+    function normalizeStr(str) {
+        if (!str) return '';
+        return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    }
+
+    async function syncDriversFromRH() {
+        if (!window.rhSupabaseClient) return;
+        
+        try {
+            const { data: rhDrivers, error: rhError } = await window.rhSupabaseClient
+                .from('rh_colaboradores')
+                .select('nome, cpf, foto_url')
+                .ilike('funcao', '%MOTORISTA DE TRITREM%')
+                .eq('status', 'Ativo');
+
+            if (rhError) return;
+            if (!rhDrivers || rhDrivers.length === 0) return;
+
+            const { data: localDrivers } = await window.supabaseClient.from('motoristas').select('name');
+            // Padroniza os nomes que já estão no banco local para não duplicar
+            const localNames = (localDrivers || []).map(d => normalizeStr(d.name));
+
+            const newDrivers = [];
+            const addedInThisBatch = [];
+            
+            for (let rh of rhDrivers) {
+                const rawName = rh.nome || '';
+                const rhNameNorm = normalizeStr(rawName);
+                
+                if (rhNameNorm && !localNames.includes(rhNameNorm) && !addedInThisBatch.includes(rhNameNorm)) {
+                    newDrivers.push({
+                        name: rawName.trim().toUpperCase(), // Salva o nome sempre em maiúsculo
+                        cpf: rh.cpf || '',
+                        foto: rh.foto_url || '',
+                        occurrences: 0,
+                        score: 0,
+                        total_distance: 0,
+                        total_fuel: 0,
+                        avg_economy: 0,
+                        last_reset: new Date().toISOString()
+                    });
+                    addedInThisBatch.push(rhNameNorm);
+                }
+            }
+
+            if (newDrivers.length > 0) {
+                await window.supabaseClient.from('motoristas').insert(newDrivers);
+            }
+        } catch (error) {
+            console.error("Erro geral na sincronização com o RH:", error);
+        }
+    }
+
     async function loadDrivers() {
+        await syncDriversFromRH();
+
         const { data, error } = await window.supabaseClient.from('motoristas').select('*');
         if (!error && data) {
             drivers = data;
@@ -44,8 +100,12 @@ window.driversModule = (function() {
         const allOcorrencias = window.ocorrenciasModule ? window.ocorrenciasModule.getAll() : [];
 
         tbody.innerHTML = displayDrivers.map(driver => {
-            const dTrips = allTrips.filter(t => t.motorista === driver.name);
-            const dOcorrencias = allOcorrencias.filter(oc => oc.motorista === driver.name);
+            const driverNameNorm = normalizeStr(driver.name);
+            
+            // CRUCIAL: Agora a comparação ignora acentos, espaços extras e maiúsculas/minúsculas!
+            const dTrips = allTrips.filter(t => normalizeStr(t.motorista) === driverNameNorm);
+            const dOcorrencias = allOcorrencias.filter(oc => normalizeStr(oc.motorista) === driverNameNorm);
+            
             let distTotal = 0;
             let fuelTotal = 0;
             let rawScore = 0;
@@ -135,7 +195,7 @@ window.driversModule = (function() {
         btn.disabled = true;
         
         const driverData = {
-            name: document.getElementById('driver-name').value,
+            name: document.getElementById('driver-name').value.trim().toUpperCase(), // Sempre salva em maiúsculo
             cpf: document.getElementById('driver-cpf').value,
             matricula: document.getElementById('driver-matricula').value,
             foto: document.getElementById('driver-foto-base64').value
@@ -188,7 +248,9 @@ window.driversModule = (function() {
     async function updateDriverScore(driver) {
         const settings = window.settingsModule.get();
         const trips = window.tripsModule ? window.tripsModule.getAll() : [];
-        const driverTrips = trips.filter(t => t.motorista === driver.name);
+        
+        const driverNameNorm = normalizeStr(driver.name);
+        const driverTrips = trips.filter(t => normalizeStr(t.motorista) === driverNameNorm);
         
         let score = 0; let totalDistance = 0; let totalFuel = 0;
         

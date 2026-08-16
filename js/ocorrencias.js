@@ -1,21 +1,39 @@
 window.ocorrenciasModule = (function() {
     let ocorrencias = [];
-    let editingId = null;
     let chartInstance = null; 
 
+    // Nova função que puxa direto do banco de dados do RH
     async function loadOcorrencias() {
+        if (!window.rhSupabaseClient) {
+            console.error("Cliente Supabase do RH não está configurado.");
+            return [];
+        }
+
         try {
-            // Removida a ordenação pelo Supabase para evitar bloqueios caso a coluna não exista
-            const { data, error } = await window.supabaseClient.from('ocorrencias').select('*');
+            // Puxa as ocorrências do RH ordenadas pelas mais recentes
+            const { data, error } = await window.rhSupabaseClient
+                .from('ocorrencias')
+                .select('*')
+                .order('data_ocorrido', { ascending: false });
             
             if (error) {
-                console.error("Erro ao carregar ocorrências do Supabase:", error);
+                console.error("Erro ao carregar ocorrências do Supabase do RH:", error);
             }
+            
             if (data) {
-                ocorrencias = data;
+                // Mapeia as colunas do RH para o padrão que o sistema de frota já entende
+                ocorrencias = data.map(rhOc => ({
+                    id: rhOc.id,
+                    data: rhOc.data_ocorrido,
+                    hora: rhOc.hora_ocorrido,
+                    motorista: rhOc.nome_envolvido,
+                    local: rhOc.local_projeto,
+                    placa: rhOc.placa,
+                    descricao: rhOc.descricao_fatos
+                }));
             }
         } catch(e) {
-            console.error("Erro na comunicação com o banco:", e);
+            console.error("Erro na comunicação com o banco do RH:", e);
         }
 
         renderOcorrencias();
@@ -28,7 +46,7 @@ window.ocorrenciasModule = (function() {
         if (!tbody) return;
 
         if (ocorrencias.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">Nenhuma ocorrência registrada no sistema.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">Nenhuma ocorrência encontrada no sistema do RH.</td></tr>';
             return;
         }
 
@@ -46,19 +64,24 @@ window.ocorrenciasModule = (function() {
                 const partes = oc.data.split('-');
                 if (partes.length === 3) dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
             }
+            
+            // Remove os segundos da hora, se existirem (ex: 14:30:00 vira 14:30)
+            let horaFormatada = '--:--';
+            if (oc.hora) {
+                horaFormatada = oc.hora.length > 5 ? oc.hora.substring(0, 5) : oc.hora;
+            }
 
             return `
             <tr>
-                <td style="font-weight: 500; color: #f8fafc;">${dataFormatada} às ${oc.hora || '--:--'}</td>
+                <td style="font-weight: 500; color: #f8fafc;">${dataFormatada} às ${horaFormatada}</td>
                 <td style="color: #e2e8f0; font-weight: 500;">${escapeHtml(oc.motorista || '-')}</td>
-                <td><span class="status-badge warning">${escapeHtml(oc.placa)}</span></td>
-                <td>${escapeHtml(oc.local)}</td>
-                <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #94a3b8;">${escapeHtml(oc.descricao)}</td>
+                <td><span class="status-badge warning">${escapeHtml(oc.placa || '-')}</span></td>
+                <td>${escapeHtml(oc.local || '-')}</td>
+                <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #94a3b8;" title="${escapeHtml(oc.descricao)}">${escapeHtml(oc.descricao || '-')}</td>
                 <td>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-primary btn-sm btn-icon" title="Editar" onclick="window.ocorrenciasModule.edit(${oc.id})"><i class="fas fa-edit"></i></button>
-                        <button class="btn-danger btn-sm btn-icon" title="Excluir" onclick="window.ocorrenciasModule.delete(${oc.id})"><i class="fas fa-trash"></i></button>
-                    </div>
+                    <span class="status-badge success" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid #10b981;">
+                        <i class="fas fa-lock"></i> RH
+                    </span>
                 </td>
             </tr>`;
         }).join('');
@@ -259,125 +282,11 @@ window.ocorrenciasModule = (function() {
         const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
     }
 
-    function populatePlacasSelect() {
-        const select = document.getElementById('oc-placa');
-        if (!select) return;
-        const cavalos = window.cavalosModule ? window.cavalosModule.getAll() : [];
-        const sortedCavalos = [...cavalos].sort((a, b) => (a.placa || '').localeCompare(b.placa || ''));
-        
-        let optionsHtml = '<option value="">Selecione a placa...</option>';
-        sortedCavalos.forEach(cavalo => {
-            optionsHtml += `<option value="${cavalo.placa}">${cavalo.placa} (Conjunto: ${cavalo.conjunto})</option>`;
-        });
-        select.innerHTML = optionsHtml;
-    }
-
-    function populateMotoristasSelect() {
-        const select = document.getElementById('oc-motorista');
-        if (!select) return;
-        const motoristas = window.driversModule ? window.driversModule.getAll() : [];
-        const sortedMotoristas = [...motoristas].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        
-        let optionsHtml = '<option value="">Selecione o motorista (Opcional)...</option>';
-        sortedMotoristas.forEach(mot => {
-            optionsHtml += `<option value="${mot.name}">${mot.name}</option>`;
-        });
-        select.innerHTML = optionsHtml;
-    }
-
-    function openModal(ocorrenciaId = null) {
-        editingId = ocorrenciaId;
-        const modal = document.getElementById('ocorrencia-modal');
-        const title = document.getElementById('ocorrencia-modal-title');
-        const form = document.getElementById('ocorrencia-form');
-        
-        populatePlacasSelect();
-        populateMotoristasSelect();
-        
-        if (ocorrenciaId) {
-            const oc = ocorrencias.find(o => o.id === ocorrenciaId);
-            if (oc) {
-                document.getElementById('oc-data').value = oc.data;
-                document.getElementById('oc-hora').value = oc.hora;
-                document.getElementById('oc-motorista').value = oc.motorista || '';
-                document.getElementById('oc-local').value = oc.local;
-                document.getElementById('oc-placa').value = oc.placa;
-                document.getElementById('oc-descricao').value = oc.descricao;
-                title.textContent = 'Editar Ocorrência';
-            }
-        } else {
-            form.reset();
-            const hoje = new Date();
-            const yyyy = hoje.getFullYear();
-            const mm = String(hoje.getMonth() + 1).padStart(2, '0');
-            const dd = String(hoje.getDate()).padStart(2, '0');
-            document.getElementById('oc-data').value = `${yyyy}-${mm}-${dd}`;
-            title.textContent = 'Nova Ocorrência';
-        }
-        modal.classList.add('active');
-    }
-
-    function closeModal() {
-        document.getElementById('ocorrencia-modal').classList.remove('active');
-        editingId = null;
-        document.getElementById('ocorrencia-form').reset();
-    }
-
-    function updateSystemViews() {
-        if (window.rankingModule) window.rankingModule.render();
-        if (window.app) window.app.updateDashboard();
-    }
-
-    async function saveOcorrencia(event) {
-        event.preventDefault();
-        const btn = event.target.querySelector('button[type="submit"]');
-        btn.disabled = true;
-        const ocorrenciaData = {
-            data: document.getElementById('oc-data').value,
-            hora: document.getElementById('oc-hora').value,
-            motorista: document.getElementById('oc-motorista').value,
-            local: document.getElementById('oc-local').value,
-            placa: document.getElementById('oc-placa').value,
-            descricao: document.getElementById('oc-descricao').value
-        };
-        
-        if (editingId) {
-            await window.supabaseClient.from('ocorrencias').update(ocorrenciaData).eq('id', editingId);
-            utils.showAlert('Ocorrência atualizada com sucesso!', 'success');
-        } else {
-            await window.supabaseClient.from('ocorrencias').insert([ocorrenciaData]);
-            utils.showAlert('Ocorrência registrada no banco!', 'success');
-        }
-        
-        await loadOcorrencias(); 
-        closeModal();
-        updateSystemViews();
-        btn.disabled = false;
-    }
-
-    async function deleteOcorrencia(id) {
-        if (confirm('Tem certeza que deseja excluir esta ocorrência do banco de dados?')) {
-            await window.supabaseClient.from('ocorrencias').delete().eq('id', id);
-            await loadOcorrencias(); 
-            utils.showAlert('Ocorrência excluída com sucesso!', 'success');
-            updateSystemViews();
-        }
-    }
-
     function getAllOcorrencias() { return ocorrencias; }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const form = document.getElementById('ocorrencia-form');
-        if (form) form.addEventListener('submit', saveOcorrencia);
-    });
 
     return { 
         load: loadOcorrencias, 
         getAll: getAllOcorrencias, 
-        openModal, 
-        closeModal, 
-        edit: openModal, 
-        delete: deleteOcorrencia,
         renderDashboard 
     };
 })();

@@ -2,6 +2,13 @@ const supabaseUrl = window.ENV.SUPABASE_URL;
 const supabaseKey = window.ENV.SUPABASE_KEY;
 window.supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
+// Inicializa a conexão com o banco de dados do RH
+const rhSupabaseUrl = window.ENV.RH_SUPABASE_URL;
+const rhSupabaseKey = window.ENV.RH_SUPABASE_KEY;
+if (rhSupabaseUrl && rhSupabaseKey) {
+    window.rhSupabaseClient = supabase.createClient(rhSupabaseUrl, rhSupabaseKey);
+}
+
 window.app = (function() {
     async function init() {
         const currentPath = window.location.pathname.toLowerCase();
@@ -148,7 +155,6 @@ window.app = (function() {
 
         const top5Tbody = document.getElementById('top5-list');
         if (top5Tbody) {
-            // MODIFICADO: Filtra apenas motoristas com 1000 km ou mais antes de pegar o Top 5
             const top5 = driverArray.filter(d => d.distance >= 1000).slice(0, 5);
             top5Tbody.innerHTML = top5.map(d => `<tr><td style="font-weight:500;">${d.name}</td><td style="color: ${getColor(d.kml)}; font-weight: bold;">${utils.formatNumber(d.kml)}</td><td>${utils.formatNumber(d.distance, 0)} km</td></tr>`).join('') || '<tr><td colspan="3" class="text-center">Sem dados de viagens</td></tr>';
         }
@@ -161,7 +167,6 @@ window.app = (function() {
 
         const dashDriversTbody = document.getElementById('dash-drivers-list');
         if (dashDriversTbody) {
-            // MODIFICADO: Filtra apenas motoristas com 1000 km ou mais na tabela de desempenho
             const dashDrivers = driverArray.filter(d => d.distance >= 1000);
             dashDriversTbody.innerHTML = dashDrivers.map(d => `<tr><td style="font-weight:500; color: #f8fafc;">${d.name}</td><td>${utils.formatNumber(d.distance, 0)}</td><td style="color: ${getColor(d.kml)}; font-weight: bold;">${utils.formatNumber(d.kml)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-center">Nenhuma viagem registrada</td></tr>';
         }
