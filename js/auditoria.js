@@ -7,7 +7,6 @@ window.filterGerencial = function() {
     });
 };
 
-// Função Global que dispara o Alerta (Popup) com o motivo da desclassificação
 window.showDisqReason = function(type, driver, payload) {
     let msg = `MOTORISTA: ${driver}\n\n`;
     if (type === 'ocorrencia') {
@@ -21,22 +20,57 @@ window.showDisqReason = function(type, driver, payload) {
 };
 
 window.auditoriaModule = (function() {
+
+    function getCycleInfo() {
+        const s = window.settingsModule ? window.settingsModule.get() : {};
+        return { startDay: s.cicloInicio || 26, endDay: s.cicloFim || 25 };
+    }
+
+    function getCycleMonthYear(dateStr, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        const dom = d.getDate();
+        let m = d.getMonth() + 1;
+        let y = d.getFullYear();
+        
+        if (startDay > endDay && dom >= startDay) {
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        return `${y}-${String(m).padStart(2, '0')}`;
+    }
+
+    function isDateInCycle(dateStr, targetYear, targetMonth, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        
+        let startDate, endDate;
+        if (startDay > endDay) {
+            startDate = new Date(targetYear, targetMonth - 2, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+        } else {
+            startDate = new Date(targetYear, targetMonth - 1, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59); 
+            if (endDay < endDate.getDate()) {
+                endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+            }
+        }
+        return d >= startDate && d <= endDate;
+    }
+
     function getAvailableMonths(trips) {
+        const { startDay, endDay } = getCycleInfo();
         const monthsSet = new Set();
         trips.forEach(t => {
             if(t.inicio) {
-                const d = new Date(t.inicio);
-                if(!isNaN(d.getTime())) {
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const y = d.getFullYear();
-                    monthsSet.add(`${y}-${m}`);
-                }
+                const cycle = getCycleMonthYear(t.inicio, startDay, endDay);
+                if (cycle) monthsSet.add(cycle);
             }
         });
         let available = Array.from(monthsSet).sort().reverse();
         if (available.length === 0) {
-            const d = new Date();
-            available.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+            const now = new Date();
+            available.push(getCycleMonthYear(now.toISOString(), startDay, endDay));
         }
         return available;
     }
@@ -75,19 +109,18 @@ window.auditoriaModule = (function() {
             selectedMonth = filterSelect.value;
         }
 
+        const { startDay, endDay } = getCycleInfo();
         const [selYear, selMonth] = selectedMonth.split('-');
         const DISTANCIA_MINIMA_QUALIFICACAO = 1000; 
         
         const currentMonthTrips = allTrips.filter(t => {
             if(!t.inicio) return false;
-            const d = new Date(t.inicio);
-            return d.getFullYear() == selYear && (d.getMonth() + 1) == selMonth;
+            return isDateInCycle(t.inicio, parseInt(selYear), parseInt(selMonth), startDay, endDay);
         });
 
         const currentMonthOcorrencias = ocorrencias.filter(oc => {
             if(!oc.data) return false;
-            const d = new Date(oc.data + 'T00:00:00');
-            return d.getFullYear() == selYear && (d.getMonth() + 1) == selMonth;
+            return isDateInCycle(oc.data + 'T00:00:00', parseInt(selYear), parseInt(selMonth), startDay, endDay);
         });
 
         const driversStats = drivers.map(driver => {
@@ -103,7 +136,6 @@ window.auditoriaModule = (function() {
             return { ...driver, calc_distance: dist, calc_kml: kml, ocorrencia_detalhes: ocorrencia };
         });
 
-        // Pegamos os melhores APENAS entre os qualificados para não quebrar a base de 100%
         const eligibleDrivers = driversStats.filter(d => d.calc_distance >= DISTANCIA_MINIMA_QUALIFICACAO && !d.ocorrencia_detalhes);
         const baselineDrivers = eligibleDrivers.length > 0 ? eligibleDrivers : driversStats;
 
@@ -112,7 +144,6 @@ window.auditoriaModule = (function() {
         const PESO_KML = 0.70;
         const PESO_DIST = 0.30;
 
-        // Calcula a pontuação para TODOS (inclusive os desclassificados, para mostrar onde eles estariam)
         driversStats.forEach(d => {
             const kmlRatio = d.calc_kml / maxKML;
             const distRatio = d.calc_distance / maxDistance;
@@ -121,7 +152,6 @@ window.auditoriaModule = (function() {
             d.indiceDesempenho = d.ptsKml + d.ptsDist;
         });
         
-        // Ordena TODOS pelo Índice Final
         const sortedDrivers = [...driversStats].sort((a, b) => (b.indiceDesempenho || 0) - (a.indiceDesempenho || 0));
         
         const detailsContainer = document.getElementById('auditoria-details-section');
@@ -131,16 +161,16 @@ window.auditoriaModule = (function() {
             <div class="table-card full-width" style="border-top: 4px solid #3b82f6; background: #1e293b;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                     <div>
-                        <h3 style="color: #38bdf8; margin-bottom: 8px;"><i class="fas fa-calculator"></i> Prestação de Contas</h3>
+                        <h3 style="color: #38bdf8; margin-bottom: 8px;"><i class="fas fa-calculator"></i> Prestação de Contas (Ciclo)</h3>
                         <p style="color: #94a3b8; font-size: 0.85rem; line-height: 1.6;">
                             <strong>Regra:</strong> Desempenho KML (Peso 70%) + Desempenho Distância (Peso 30%) = Máx 1000 Pontos<br>
-                            <strong>Melhores Marcas do Mês:</strong> KM/L = ${utils.formatNumber(maxKML)} | Distância = ${utils.formatNumber(maxDistance, 0)} km<br>
+                            <strong>Melhores Marcas do Ciclo:</strong> KM/L = ${utils.formatNumber(maxKML)} | Distância = ${utils.formatNumber(maxDistance, 0)} km<br>
                             <strong>Trava de Qualificação:</strong> Mínimo de ${DISTANCIA_MINIMA_QUALIFICACAO} km rodados.
                         </p>
                     </div>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="color: #94a3b8; font-weight: 600; font-size: 0.9rem;">Mês:</label>
+                            <label style="color: #94a3b8; font-weight: 600; font-size: 0.9rem;">Competência:</label>
                             <select id="auditoria-month-filter" class="form-control filter-input" style="width: 130px; font-weight: bold; background: #0f172a;" onchange="window.auditoriaModule.render()">
                                 ${availableMonths.map(m => `<option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${formatMonthStr(m)}</option>`).join('')}
                             </select>
@@ -172,10 +202,8 @@ window.auditoriaModule = (function() {
             const kmlPerc = ((d.calc_kml / maxKML) * 100).toFixed(1);
             const distPerc = ((d.calc_distance / maxDistance) * 100).toFixed(1);
             
-            // Verifica se está desclassificado
             const isDisqualified = d.ocorrencia_detalhes || d.calc_distance < DISTANCIA_MINIMA_QUALIFICACAO;
             
-            // Estilos dinâmicos
             let textStyle = "";
             let bgStyle = "";
             let nameStyle = "font-weight: 500; color: #f8fafc;";
@@ -186,10 +214,9 @@ window.auditoriaModule = (function() {
                 textStyle = "text-decoration: line-through; opacity: 0.6;";
                 bgStyle = "background: rgba(239, 68, 68, 0.05);";
                 nameStyle = "font-weight: 500; color: #f87171; text-decoration: line-through;";
-                kmlColor = "#f87171"; // Força vermelho para desclassificados
+                kmlColor = "#f87171"; 
                 
                 let clickHandler = "";
-                // Usa encodeURIComponent para garantir que textos com aspas ou quebra de linha não quebrem o botão
                 if (d.ocorrencia_detalhes) {
                     const payload = encodeURIComponent(JSON.stringify({
                         data: utils.formatDate(d.ocorrencia_detalhes.data),

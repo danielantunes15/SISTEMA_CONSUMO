@@ -1,68 +1,102 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - Sistema de Gestão de Frotas</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Configurações - Sistema de Frotas</title>
+    
+    <!-- Estilos padrão do sistema -->
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div class="app-container">
-        <app-sidebar></app-sidebar>
-        <main class="main-content">
-            <app-topbar title="Configurações do Sistema"></app-topbar>
-            <div class="content-area">
-                <div class="config-card">
-                    <h2 style="display: flex; align-items: center; gap: 10px;"><i class="fas fa-sliders-h" style="color: #3b82f6;"></i> Configurações do Sistema</h2>
-                    <p style="margin-bottom: 24px;">Ajuste os parâmetros de pontuação e comportamento do sistema.</p>
-                    
-                    <div class="form-group">
-                        <label>Pontos por KM/L (média)</label>
-                        <input type="number" id="points-per-economy" step="1" class="form-control filter-input" style="width: 100%;">
-                    </div>
-                    
-                    <div class="form-group" style="margin-top: 20px;">
-                        <label>Redução de pontos por ocorrência</label>
-                        <input type="number" id="penalty-per-occurrence" step="10" class="form-control filter-input" style="width: 100%;">
-                    </div>
+    
+    <!-- Menu Lateral Dinâmico -->
+    <app-sidebar></app-sidebar>
 
-                    <!-- NOVO CAMPO: META GERAL -->
-                    <div class="form-group" style="margin-top: 20px;">
-                        <label>Meta Mensal Geral (KM/L)</label>
-                        <input type="number" id="global-goal" step="0.1" class="form-control filter-input" style="width: 100%;">
-                    </div>
+    <div class="main-content">
+        <!-- Topbar Dinâmica -->
+        <app-topbar title="Configurações"></app-topbar>
 
-                    <div class="form-group" style="margin-top: 20px; margin-bottom: 30px;">
-                        <label>Reset mensal de pontuação</label>
-                        <select id="reset-score" class="form-control filter-input" style="width: 100%;">
-                            <option value="false">Não resetar</option>
-                            <option value="true">Resetar todo mês</option>
-                        </select>
-                    </div>
+        <div class="content-area">
+            
+            <!-- Cartão Principal de Configurações -->
+            <div class="table-card" style="max-width: 800px; margin: 0 auto; border-top: 4px solid #3b82f6;">
+                <h3 style="color: #38bdf8; margin-bottom: 25px;">
+                    <i class="fas fa-sliders-h"></i> Parâmetros de Cálculo e Metas
+                </h3>
+                
+                <div class="form-group">
+                    <label for="global-goal" style="font-weight: 600; color: #e2e8f0;">Meta Global de KM/L:</label>
+                    <input type="text" id="global-goal" class="form-control" placeholder="Ex: 1.8 ou 2.0" style="background: #0f172a; border-color: #334155; color: #f8fafc;">
+                    <small style="color: #64748b; margin-top: 5px; display: block;">Esta meta define as cores de desempenho (verde/vermelho) nos painéis.</small>
+                </div>
 
-                    <button class="btn-primary" onclick="window.settingsModule.save()">
-                        <i class="fas fa-save"></i> Salvar Configurações
-                    </button>
+                <div style="display: flex; gap: 20px; margin-top: 20px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="points-per-economy" style="font-weight: 600; color: #e2e8f0;">Pontos por KM/L:</label>
+                        <input type="number" id="points-per-economy" class="form-control" style="background: #0f172a; border-color: #334155; color: #f8fafc;">
+                    </div>
                     
-                    <!-- DANGER ZONE -->
-                    <div class="danger-zone" style="margin-top: 40px; padding: 24px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; background-color: rgba(239, 68, 68, 0.05);">
-                        <h3 style="color: #f87171; margin-bottom: 8px; font-size: 1.2rem;"><i class="fas fa-exclamation-triangle"></i> Zona de Perigo</h3>
-                        <p style="color: #fca5a5; margin-bottom: 16px; font-size: 0.9rem; line-height: 1.5;">
-                            Esta ação apagará definitivamente <strong>todas as viagens importadas</strong> do banco de dados. Os cadastros de Motoristas, Cavalos e Ocorrências serão mantidos intactos.
-                        </p>
-                        <button class="btn-danger" onclick="window.settingsModule.clearAllData()">
-                            <i class="fas fa-trash-alt"></i> Apagar Todas as Viagens
-                        </button>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="penalty-per-occurrence" style="font-weight: 600; color: #e2e8f0;">Penalidade por Ocorrência (Pts):</label>
+                        <input type="number" id="penalty-per-occurrence" class="form-control" style="background: #0f172a; border-color: #334155; color: #f8fafc;">
                     </div>
                 </div>
+
+                <!-- NOVOS CAMPOS: CICLO DO MÊS -->
+                <div style="display: flex; gap: 20px; margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="ciclo-inicio" style="font-weight: 600; color: #fbbf24;"><i class="fas fa-calendar-day"></i> Início do Ciclo (Dia):</label>
+                        <input type="number" id="ciclo-inicio" min="1" max="31" class="form-control" value="26" style="background: #1e293b; border-color: #475569; color: #f8fafc;">
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="ciclo-fim" style="font-weight: 600; color: #fbbf24;"><i class="fas fa-calendar-check"></i> Fim do Ciclo (Dia):</label>
+                        <input type="number" id="ciclo-fim" min="1" max="31" class="form-control" value="25" style="background: #1e293b; border-color: #475569; color: #f8fafc;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 25px;">
+                    <label for="reset-score" style="font-weight: 600; color: #e2e8f0;">Zerar Pontuação Mensalmente?</label>
+                    <select id="reset-score" class="form-control" style="background: #0f172a; border-color: #334155; color: #f8fafc;">
+                        <option value="false">Não (Acumulativo ao longo do ano)</option>
+                        <option value="true">Sim (Zerar na virada do mês/ciclo)</option>
+                    </select>
+                </div>
+
+                <div style="margin-top: 35px; display: flex; justify-content: flex-end;">
+                    <button class="btn-primary" onclick="window.settingsModule.save()" style="padding: 12px 25px; font-size: 1.05rem;">
+                        <i class="fas fa-save"></i> Salvar Configurações
+                    </button>
+                </div>
             </div>
-        </main>
+
+            <!-- Zona de Perigo -->
+            <div class="table-card" style="max-width: 800px; margin: 30px auto; border-top: 4px solid #ef4444; background: rgba(239, 68, 68, 0.05);">
+                <h3 style="color: #ef4444; margin-bottom: 15px;">
+                    <i class="fas fa-exclamation-triangle"></i> Zona de Perigo
+                </h3>
+                <p style="color: #94a3b8; margin-bottom: 25px; line-height: 1.6;">
+                    Atenção: As ações abaixo são executadas diretamente no banco de dados e são irreversíveis. Use com cautela!
+                </p>
+                
+                <button class="btn-danger" onclick="window.settingsModule.clearAllData()" style="padding: 10px 20px;">
+                    <i class="fas fa-trash-alt"></i> Apagar TODAS as Viagens Importadas
+                </button>
+            </div>
+
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/menu.js"></script><script src="js/utils.js"></script><script src="js/config.js"></script>
-    <script src="js/app.js"></script><script src="js/settings.js"></script>
+    <!-- Scripts da Aplicação -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

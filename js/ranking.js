@@ -1,20 +1,55 @@
 window.rankingModule = (function() {
+    
+    function getCycleInfo() {
+        const s = window.settingsModule ? window.settingsModule.get() : {};
+        return { startDay: s.cicloInicio || 26, endDay: s.cicloFim || 25 };
+    }
+
+    function getCycleMonthYear(dateStr, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        const dom = d.getDate();
+        let m = d.getMonth() + 1;
+        let y = d.getFullYear();
+        
+        if (startDay > endDay && dom >= startDay) {
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        return `${y}-${String(m).padStart(2, '0')}`;
+    }
+
+    function isDateInCycle(dateStr, targetYear, targetMonth, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        
+        let startDate, endDate;
+        if (startDay > endDay) {
+            startDate = new Date(targetYear, targetMonth - 2, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+        } else {
+            startDate = new Date(targetYear, targetMonth - 1, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59); 
+            if (endDay < endDate.getDate()) {
+                endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+            }
+        }
+        return d >= startDate && d <= endDate;
+    }
+
     function getAvailableMonths(trips) {
+        const { startDay, endDay } = getCycleInfo();
         const monthsSet = new Set();
         trips.forEach(t => {
             if(t.inicio) {
-                const d = new Date(t.inicio);
-                if(!isNaN(d.getTime())) {
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const y = d.getFullYear();
-                    monthsSet.add(`${y}-${m}`);
-                }
+                const cycle = getCycleMonthYear(t.inicio, startDay, endDay);
+                if (cycle) monthsSet.add(cycle);
             }
         });
         let available = Array.from(monthsSet).sort().reverse();
         if (available.length === 0) {
-            const d = new Date();
-            available.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+            const now = new Date();
+            available.push(getCycleMonthYear(now.toISOString(), startDay, endDay));
         }
         return available;
     }
@@ -51,19 +86,18 @@ window.rankingModule = (function() {
             selectedMonth = filterSelect.value;
         }
 
+        const { startDay, endDay } = getCycleInfo();
         const [selYear, selMonth] = selectedMonth.split('-');
         const DISTANCIA_MINIMA_QUALIFICACAO = 1000;
 
         const currentMonthTrips = allTrips.filter(t => {
             if(!t.inicio) return false;
-            const d = new Date(t.inicio);
-            return d.getFullYear() == selYear && (d.getMonth() + 1) == selMonth;
+            return isDateInCycle(t.inicio, parseInt(selYear), parseInt(selMonth), startDay, endDay);
         });
 
         const currentMonthOcorrencias = ocorrencias.filter(oc => {
             if(!oc.data) return false;
-            const d = new Date(oc.data + 'T00:00:00');
-            return d.getFullYear() == selYear && (d.getMonth() + 1) == selMonth;
+            return isDateInCycle(oc.data + 'T00:00:00', parseInt(selYear), parseInt(selMonth), startDay, endDay);
         });
 
         const driversStats = drivers.map(driver => {
@@ -110,7 +144,7 @@ window.rankingModule = (function() {
         
         let html = `
             <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 30px; border-bottom: 1px solid #334155; padding-bottom: 20px;">
-                <label style="color: #94a3b8; font-weight: 600;"><i class="fas fa-calendar-alt"></i> Visualizando Mês:</label>
+                <label style="color: #94a3b8; font-weight: 600;"><i class="fas fa-calendar-alt"></i> Visualizando Competência de:</label>
                 <select id="ranking-month-filter" class="form-control filter-input" style="width: 150px; font-weight: bold; background: #1e293b; text-align: center; color: #fbbf24; border-color: #fbbf24;" onchange="window.rankingModule.render()">
                     ${availableMonths.map(m => `<option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${formatMonthStr(m)}</option>`).join('')}
                 </select>
@@ -118,7 +152,7 @@ window.rankingModule = (function() {
         `;
 
         if (sortedDrivers.length === 0) {
-            html += `<div style="text-align: center; padding: 3rem; color: #94a3b8;"><i class="fas fa-folder-open" style="font-size: 3rem; color: #475569; margin-bottom: 1rem;"></i><p>Nenhum motorista bateu as metas de qualificação neste mês específico.</p></div>`;
+            html += `<div style="text-align: center; padding: 3rem; color: #94a3b8;"><i class="fas fa-folder-open" style="font-size: 3rem; color: #475569; margin-bottom: 1rem;"></i><p>Nenhum motorista bateu as metas de qualificação neste ciclo.</p></div>`;
             rankingContainer.innerHTML = html;
             return;
         }

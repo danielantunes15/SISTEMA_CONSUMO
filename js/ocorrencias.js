@@ -2,7 +2,43 @@ window.ocorrenciasModule = (function() {
     let ocorrencias = [];
     let chartInstance = null; 
 
-    // Nova função que puxa direto do banco de dados do RH
+    function getCycleInfo() {
+        const s = window.settingsModule ? window.settingsModule.get() : {};
+        return { startDay: s.cicloInicio || 26, endDay: s.cicloFim || 25 };
+    }
+
+    function getCycleMonthYear(dateStr, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        const dom = d.getDate();
+        let m = d.getMonth() + 1;
+        let y = d.getFullYear();
+        
+        if (startDay > endDay && dom >= startDay) {
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        return `${y}-${String(m).padStart(2, '0')}`;
+    }
+
+    function isDateInCycle(dateStr, targetYear, targetMonth, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        
+        let startDate, endDate;
+        if (startDay > endDay) {
+            startDate = new Date(targetYear, targetMonth - 2, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+        } else {
+            startDate = new Date(targetYear, targetMonth - 1, startDay, 0, 0, 0);
+            endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59); 
+            if (endDay < endDate.getDate()) {
+                endDate = new Date(targetYear, targetMonth - 1, endDay, 23, 59, 59);
+            }
+        }
+        return d >= startDate && d <= endDate;
+    }
+
     async function loadOcorrencias() {
         if (!window.rhSupabaseClient) {
             console.error("Cliente Supabase do RH não está configurado.");
@@ -10,18 +46,14 @@ window.ocorrenciasModule = (function() {
         }
 
         try {
-            // Puxa as ocorrências do RH ordenadas pelas mais recentes
             const { data, error } = await window.rhSupabaseClient
                 .from('ocorrencias')
                 .select('*')
                 .order('data_ocorrido', { ascending: false });
             
-            if (error) {
-                console.error("Erro ao carregar ocorrências do Supabase do RH:", error);
-            }
+            if (error) console.error("Erro RH Ocorrencias:", error);
             
             if (data) {
-                // Mapeia as colunas do RH para o padrão que o sistema de frota já entende
                 ocorrencias = data.map(rhOc => ({
                     id: rhOc.id,
                     data: rhOc.data_ocorrido,
@@ -32,9 +64,7 @@ window.ocorrenciasModule = (function() {
                     descricao: rhOc.descricao_fatos
                 }));
             }
-        } catch(e) {
-            console.error("Erro na comunicação com o banco do RH:", e);
-        }
+        } catch(e) { console.error("Erro BD RH:", e); }
 
         renderOcorrencias();
         renderDashboard(); 
@@ -46,11 +76,10 @@ window.ocorrenciasModule = (function() {
         if (!tbody) return;
 
         if (ocorrencias.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">Nenhuma ocorrência encontrada no sistema do RH.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">Nenhuma ocorrência encontrada.</td></tr>';
             return;
         }
 
-        // Ordenação segura feita diretamente no JavaScript
         const sortedOcorrencias = [...ocorrencias].sort((a, b) => {
             const dateA = a.data ? new Date(`${a.data}T${a.hora || '00:00'}:00`).getTime() : 0;
             const dateB = b.data ? new Date(`${b.data}T${b.hora || '00:00'}:00`).getTime() : 0;
@@ -58,18 +87,13 @@ window.ocorrenciasModule = (function() {
         });
 
         tbody.innerHTML = sortedOcorrencias.map(oc => {
-            // Formatação de data à prova de falhas
             let dataFormatada = '-';
             if (oc.data) {
                 const partes = oc.data.split('-');
                 if (partes.length === 3) dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
             }
-            
-            // Remove os segundos da hora, se existirem (ex: 14:30:00 vira 14:30)
             let horaFormatada = '--:--';
-            if (oc.hora) {
-                horaFormatada = oc.hora.length > 5 ? oc.hora.substring(0, 5) : oc.hora;
-            }
+            if (oc.hora) horaFormatada = oc.hora.length > 5 ? oc.hora.substring(0, 5) : oc.hora;
 
             return `
             <tr>
@@ -88,19 +112,18 @@ window.ocorrenciasModule = (function() {
     }
 
     function getAvailableMonths() {
+        const { startDay, endDay } = getCycleInfo();
         const monthsSet = new Set();
         ocorrencias.forEach(oc => {
             if(oc.data) {
-                const partes = oc.data.split('-');
-                if (partes.length >= 2) {
-                    monthsSet.add(`${partes[0]}-${partes[1]}`);
-                }
+                const cycle = getCycleMonthYear(oc.data + 'T00:00:00', startDay, endDay);
+                if (cycle) monthsSet.add(cycle);
             }
         });
         let available = Array.from(monthsSet).sort().reverse();
         if (available.length === 0) {
-            const d = new Date();
-            available.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+            const now = new Date();
+            available.push(getCycleMonthYear(now.toISOString(), startDay, endDay));
         }
         return available;
     }
@@ -116,7 +139,7 @@ window.ocorrenciasModule = (function() {
         const filterSelect = document.getElementById('dashboard-month-filter');
         
         if (filterSelect && filterSelect.options.length === 0) {
-            filterSelect.innerHTML = availableMonths.map(m => `<option value="${m}">${formatMonthStr(m)}</option>`).join('');
+            filterSelect.innerHTML = availableMonths.map(m => `<option value="${m}">Ciclo de ${formatMonthStr(m)}</option>`).join('');
         }
         
         let selectedMonth = availableMonths[0]; 
@@ -124,15 +147,14 @@ window.ocorrenciasModule = (function() {
             selectedMonth = filterSelect.value;
         }
         
+        const { startDay, endDay } = getCycleInfo();
         const [selYear, selMonth] = selectedMonth.split('-');
 
         const currentMonthOcorrencias = ocorrencias.filter(oc => {
             if(!oc.data) return false;
-            const partes = oc.data.split('-');
-            return partes[0] == selYear && partes[1] == selMonth;
+            return isDateInCycle(oc.data + 'T00:00:00', parseInt(selYear), parseInt(selMonth), startDay, endDay);
         });
 
-        // 1. Atualizar KPIs do Mês
         const totalEl = document.getElementById('oc-total');
         if (totalEl) totalEl.textContent = currentMonthOcorrencias.length;
 
@@ -154,31 +176,51 @@ window.ocorrenciasModule = (function() {
         if (reinEl) reinEl.textContent = topMotorista[1] > 0 ? `${topMotorista[0]} (${topMotorista[1]})` : '-';
         if (localEl) localEl.textContent = topLocal[1] > 0 ? `${topLocal[0]} (${topLocal[1]})` : '-';
 
-        // 2. Preparar Dados Diários
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        const currentDay = now.getDate();
+        // Gráfico Inteligente para o Ciclo Personalizado
+        let startDate, endDateCycle;
+        const targetYear = parseInt(selYear);
+        const targetMonth = parseInt(selMonth);
         
-        const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+        if (startDay > endDay) {
+            startDate = new Date(targetYear, targetMonth - 2, startDay);
+            endDateCycle = new Date(targetYear, targetMonth - 1, endDay);
+        } else {
+            startDate = new Date(targetYear, targetMonth - 1, startDay);
+            endDateCycle = new Date(targetYear, targetMonth, 0);
+            if (endDay < endDateCycle.getDate()) {
+                endDateCycle = new Date(targetYear, targetMonth - 1, endDay);
+            }
+        }
+
         const labels = [];
         const dataCounts = [];
-
-        for (let i = 1; i <= daysInMonth; i++) {
-            labels.push(`${String(i).padStart(2, '0')}/${selMonth}`);
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDateCycle) {
+            const dStr = String(currentDate.getDate()).padStart(2, '0');
+            const mStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+            labels.push(`${dStr}/${mStr}`);
             
-            if (parseInt(selYear) === currentYear && parseInt(selMonth) === currentMonth && i > currentDay) {
+            if (currentDate > now) {
                 dataCounts.push(null);
             } else {
-                dataCounts.push(0); 
+                dataCounts.push(0);
             }
+            currentDate.setDate(currentDate.getDate() + 1);
         }
 
         currentMonthOcorrencias.forEach(oc => {
             if (oc.data) {
-                const dayIndex = parseInt(oc.data.split('-')[2]) - 1; 
-                if (dayIndex >= 0 && dayIndex < daysInMonth && dataCounts[dayIndex] !== null) {
-                    dataCounts[dayIndex]++;
+                const parts = oc.data.split('-'); 
+                const ocD = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+                
+                const diffTime = ocD.getTime() - startDate.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays >= 0 && diffDays < dataCounts.length && dataCounts[diffDays] !== null) {
+                    dataCounts[diffDays]++;
                 }
             }
         });

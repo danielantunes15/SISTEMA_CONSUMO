@@ -2,7 +2,6 @@ const supabaseUrl = window.ENV.SUPABASE_URL;
 const supabaseKey = window.ENV.SUPABASE_KEY;
 window.supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-// Inicializa a conexão com o banco de dados do RH
 const rhSupabaseUrl = window.ENV.RH_SUPABASE_URL;
 const rhSupabaseKey = window.ENV.RH_SUPABASE_KEY;
 if (rhSupabaseUrl && rhSupabaseKey) {
@@ -10,6 +9,26 @@ if (rhSupabaseUrl && rhSupabaseKey) {
 }
 
 window.app = (function() {
+
+    function getCycleInfo() {
+        const s = window.settingsModule ? window.settingsModule.get() : {};
+        return { startDay: s.cicloInicio || 26, endDay: s.cicloFim || 25 };
+    }
+
+    function getCycleMonthYear(dateStr, startDay, endDay) {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        const dom = d.getDate();
+        let m = d.getMonth() + 1;
+        let y = d.getFullYear();
+        
+        if (startDay > endDay && dom >= startDay) {
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        return `${y}-${String(m).padStart(2, '0')}`;
+    }
+
     async function init() {
         const currentPath = window.location.pathname.toLowerCase();
         const isPage = (name) => currentPath.includes(name) || (name === 'index' && (currentPath.endsWith('/') || currentPath.endsWith('index.html')));
@@ -37,8 +56,6 @@ window.app = (function() {
             if (window.cavalosModule) await window.cavalosModule.load();
         }
         else if (isPage('motoristas')) {
-            // Forçando o carregamento das Viagens e Ocorrências 
-            // para que o cálculo da média e pontuação funcione!
             if (window.tripsModule) await window.tripsModule.load();
             if (window.ocorrenciasModule) await window.ocorrenciasModule.load();
             if (window.driversModule) await window.driversModule.load();
@@ -143,10 +160,14 @@ window.app = (function() {
 
         if (topDriverEl) {
             const now = new Date();
+            const { startDay, endDay } = getCycleInfo();
+            const currentCycle = getCycleMonthYear(now.toISOString(), startDay, endDay);
+
             const eligibleForHighlight = driverArray.filter(d => {
                 const hasOcorrenciaMes = ocorrencias.some(oc => {
-                    const ocDate = new Date(oc.data + 'T00:00:00');
-                    return oc.motorista === d.name && ocDate.getMonth() === now.getMonth() && ocDate.getFullYear() === now.getFullYear();
+                    if (!oc.data) return false;
+                    const ocCycle = getCycleMonthYear(oc.data + 'T00:00:00', startDay, endDay);
+                    return oc.motorista === d.name && ocCycle === currentCycle;
                 });
                 return !hasOcorrenciaMes;
             });
