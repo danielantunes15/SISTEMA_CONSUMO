@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Histórico de Viagens"></app-topbar>
+            <div class="content-area">
+                <div class="table-card full-width">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;"><i class="fas fa-history"></i> Histórico Completo de Viagens</h3>
+                        <span class="status-badge success" id="historico-count">0 registros globais</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr><th>Motorista</th><th>Início (Data/Hora)</th><th>Fim (Data/Hora)</th><th>Distância (Km)</th><th>KM/L</th><th>Total Litros</th></tr>
+                            </thead>
+                            <tbody id="historico-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/menu.js"></script><script src="js/utils.js"></script><script src="js/config.js"></script>
+    <script src="js/app.js"></script><script src="js/trips.js"></script>
+</body>
+</html>

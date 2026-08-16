@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Configurações do Sistema"></app-topbar>
+            <div class="content-area">
+                <div class="config-card">
+                    <h2 style="display: flex; align-items: center; gap: 10px;"><i class="fas fa-sliders-h" style="color: #3b82f6;"></i> Configurações do Sistema</h2>
+                    <p style="margin-bottom: 24px;">Ajuste os parâmetros de pontuação e comportamento do sistema.</p>
+                    
+                    <div class="form-group">
+                        <label>Pontos por KM/L (média)</label>
+                        <input type="number" id="points-per-economy" step="1" class="form-control filter-input" style="width: 100%;">
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Redução de pontos por ocorrência</label>
+                        <input type="number" id="penalty-per-occurrence" step="10" class="form-control filter-input" style="width: 100%;">
+                    </div>
+
+                    <!-- NOVO CAMPO: META GERAL -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Meta Mensal Geral (KM/L)</label>
+                        <input type="number" id="global-goal" step="0.1" class="form-control filter-input" style="width: 100%;">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px; margin-bottom: 30px;">
+                        <label>Reset mensal de pontuação</label>
+                        <select id="reset-score" class="form-control filter-input" style="width: 100%;">
+                            <option value="false">Não resetar</option>
+                            <option value="true">Resetar todo mês</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-primary" onclick="window.settingsModule.save()">
+                        <i class="fas fa-save"></i> Salvar Configurações
+                    </button>
+                    
+                    <!-- DANGER ZONE -->
+                    <div class="danger-zone" style="margin-top: 40px; padding: 24px; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; background-color: rgba(239, 68, 68, 0.05);">
+                        <h3 style="color: #f87171; margin-bottom: 8px; font-size: 1.2rem;"><i class="fas fa-exclamation-triangle"></i> Zona de Perigo</h3>
+                        <p style="color: #fca5a5; margin-bottom: 16px; font-size: 0.9rem; line-height: 1.5;">
+                            Esta ação apagará definitivamente <strong>todas as viagens importadas</strong> do banco de dados. Os cadastros de Motoristas, Cavalos e Ocorrências serão mantidos intactos.
+                        </p>
+                        <button class="btn-danger" onclick="window.settingsModule.clearAllData()">
+                            <i class="fas fa-trash-alt"></i> Apagar Todas as Viagens
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/menu.js"></script><script src="js/utils.js"></script><script src="js/config.js"></script>
+    <script src="js/app.js"></script><script src="js/settings.js"></script>
+</body>
+</html>

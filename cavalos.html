@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cavalos - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Cadastro de Cavalos"></app-topbar>
+            <div class="content-area">
+                <div class="table-card full-width">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;"><i class="fas fa-truck-moving"></i> Cadastro de Cavalos</h3>
+                        <button class="btn-primary" onclick="window.cavalosModule.openModal()">
+                            <i class="fas fa-plus"></i> Novo Cavalo
+                        </button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr><th>Conjunto</th><th>Placa</th><th>Cor</th><th>Frota</th><th>Carretas vinculadas</th><th>Ações</th></tr>
+                            </thead>
+                            <tbody id="cavalos-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Específico desta página -->
+    <div id="cavalo-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="cavalo-modal-title" style="color: #f8fafc;">Novo Cavalo</h2>
+                <button class="modal-close" onclick="window.cavalosModule.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="cavalo-form">
+                    <div class="form-group"><label>Conjunto</label><input type="text" id="cavalo-conjunto" required class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Placa</label><input type="text" id="cavalo-placa" required class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Cor</label><input type="text" id="cavalo-cor" class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Frota</label><input type="text" id="cavalo-frota" required class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Carreta 1</label><input type="text" id="cavalo-carreta1" class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Carreta 2</label><input type="text" id="cavalo-carreta2" class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="form-group" style="margin-top: 15px;"><label>Carreta 3</label><input type="text" id="cavalo-carreta3" class="form-control filter-input" style="width: 100%;"></div>
+                    <div class="modal-footer" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" class="btn-secondary" onclick="window.cavalosModule.closeModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/menu.js"></script><script src="js/utils.js"></script><script src="js/config.js"></script>
+    <script src="js/app.js"></script><script src="js/cavalos.js"></script>
+</body>
+</html>

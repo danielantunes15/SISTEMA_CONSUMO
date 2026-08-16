@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motoristas - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Cadastro de Motoristas"></app-topbar>
+            <div class="content-area">
+                <div class="table-card full-width">
+                    
+                    <!-- BARRA SUPERIOR (TÍTULO, BUSCA E BOTÃO NOVO) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                        <h3 style="margin: 0;"><i class="fas fa-address-card"></i> Cadastro de Motoristas</h3>
+                        
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <!-- CAMPO DE BUSCA -->
+                            <div style="position: relative; min-width: 250px;">
+                                <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b;"></i>
+                                <input type="text" id="search-driver" onkeyup="window.driversModule.filterDrivers()" placeholder="Buscar por nome..." class="form-control filter-input" style="width: 100%; padding-left: 36px;">
+                            </div>
+                            
+                            <button class="btn-primary" onclick="window.driversModule.openModal()">
+                                <i class="fas fa-plus"></i> Novo Motorista
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>CPF</th>
+                                    <th>KM Total</th>
+                                    <th>Pontuação</th>
+                                    <th>Ocorrências</th>
+                                    <th>Média KM/L</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drivers-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Específico desta página -->
+    <div id="driver-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title" style="color: #f8fafc;">Novo Motorista</h2>
+                <button class="modal-close" onclick="window.driversModule.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="driver-form">
+                    <div class="form-group">
+                        <label>Nome Completo</label>
+                        <input type="text" id="driver-name" required class="form-control filter-input" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>CPF</label>
+                        <input type="text" id="driver-cpf" required class="form-control filter-input" style="width: 100%;" pattern="\d{3}\.?\d{3}\.?\d{3}-?\d{2}">
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Matrícula (Interno)</label>
+                        <input type="text" id="driver-matricula" required class="form-control filter-input" style="width: 100%;">
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Foto do Motorista (Opcional)</label>
+                        <input type="file" id="driver-foto" accept="image/*" class="form-control filter-input" style="width: 100%; padding: 5px; height: auto; cursor: pointer;">
+                        <input type="hidden" id="driver-foto-base64">
+                        <div id="foto-preview" style="margin-top: 10px; display: flex; justify-content: center;"></div>
+                    </div>
+                    
+                    <div class="modal-footer" style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="button" class="btn-secondary" onclick="window.driversModule.closeModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts do Sistema -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/trips.js"></script>
+    <script src="js/ocorrencias.js"></script>
+    <script src="js/cavalos.js"></script>
+    <script src="js/drivers.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Importar Dados de Viagens"></app-topbar>
+            <div class="content-area">
+                <div class="table-card full-width" style="margin-bottom: 24px;">
+                    <h3><i class="fas fa-file-excel"></i> Importar Dados de Viagens</h3>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <h2>Clique ou arraste o arquivo Excel aqui</h2>
+                        <p style="color: #64748b; margin-top: 8px;">Suporte para arquivos .xlsx e .xls</p>
+                        <input type="file" id="excel-input" accept=".xlsx, .xls" style="display: none;">
+                    </div>
+                    <div id="import-status"></div>
+                </div>
+                <div class="table-card full-width">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;"><i class="fas fa-list"></i> Resumo da Última Importação</h3>
+                        <span class="status-badge success" id="trip-count">0 registros válidos</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr><th>Motorista</th><th>Distância (Km)</th><th>KM/L</th><th>Litros</th><th>Início</th></tr>
+                            </thead>
+                            <tbody id="trips-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="js/menu.js"></script><script src="js/utils.js"></script><script src="js/config.js"></script>
+    <script src="js/app.js"></script><script src="js/trips.js"></script><script src="js/drivers.js"></script><script src="js/settings.js"></script>
+</body>
+</html>

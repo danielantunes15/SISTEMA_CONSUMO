@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sistema de Gestão de Frotas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <app-sidebar></app-sidebar>
+        <main class="main-content">
+            <app-topbar title="Dashboard"></app-topbar>
+            
+            <div class="content-area">
+                <!-- Filtro Global de Conjunto/Cavalo -->
+                <div class="global-filters" style="margin-bottom: 24px; display: flex; gap: 16px; padding: 16px; background: #1e293b; border-radius: 12px; border: 1px solid #334155;">
+                    <div class="form-group" style="flex: 1; max-width: 300px;">
+                        <label style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Filtrar Resultados por Placa</label>
+                        <select id="dashboard-cavalo-filter" class="form-control filter-input" style="width: 100%; margin-top: 8px;">
+                            <option value="">Todas as Placas / Conjuntos Gerais</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card highlight-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Total de Motoristas</h3><p id="total-drivers">0</p>
+                        </div>
+                    </div>
+                    
+                    <!-- NOVO CARD: KM TOTAL -->
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: #10b981; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2);"><i class="fas fa-road"></i></div>
+                        <div class="stat-info">
+                            <h3>Distância Total (Filtro)</h3><p id="total-distance">0 km</p>
+                        </div>
+                    </div>
+
+                    <!-- NOVO CARD: LITROS TOTAIS -->
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: #ef4444; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2);"><i class="fas fa-fill-drip"></i></div>
+                        <div class="stat-info">
+                            <h3>Litros Consumidos</h3><p id="total-liters">0 L</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2);"><i class="fas fa-gas-pump"></i></div>
+                        <div class="stat-info">
+                            <h3>Média KM/L (Filtro)</h3><p id="avg-economy">0.00</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: #8b5cf6; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2);"><i class="fas fa-crown"></i></div>
+                        <div class="stat-info">
+                            <h3>Destaque do Mês</h3><p id="top-driver" style="font-size: 1.2rem;">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nova Linha: Top 5 e Bottom 5 -->
+                <div class="tables-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-bottom: 32px;">
+                    <!-- TOP 5 -->
+                    <div class="table-card">
+                        <h3 style="color: #10b981; margin-bottom: 20px;"><i class="fas fa-arrow-up"></i> Top 5 - Maiores Médias</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr><th>Motorista</th><th>KM/L</th><th>Distância</th></tr>
+                                </thead>
+                                <tbody id="top5-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- BOTTOM 5 -->
+                    <div class="table-card">
+                        <h3 style="color: #f87171; margin-bottom: 20px;"><i class="fas fa-arrow-down"></i> Top 5 Atenção - Menores Médias</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr><th>Motorista</th><th>KM/L</th><th>Distância</th></tr>
+                                </thead>
+                                <tbody id="bottom5-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nova Linha: Desempenho Detalhado (Motoristas e Cavalos) -->
+                <div class="tables-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+                    <div class="table-card">
+                        <h3 style="margin-bottom: 20px;"><i class="fas fa-id-card"></i> Desempenho por Motorista</h3>
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr><th>Motorista</th><th>KM Total</th><th>Média KM/L</th></tr>
+                                </thead>
+                                <tbody id="dash-drivers-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="table-card">
+                        <h3 style="margin-bottom: 20px;"><i class="fas fa-truck-moving"></i> Desempenho por Cavalo / Conjunto</h3>
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr><th>Placa (Conjunto)</th><th>KM Total</th><th>Média KM/L</th></tr>
+                                </thead>
+                                <tbody id="dash-cavalos-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/utils.js"></script><script src="js/config.js"></script><script src="js/app.js"></script>
+    <script src="js/settings.js"></script><script src="js/trips.js"></script><script src="js/drivers.js"></script>
+    <script src="js/cavalos.js"></script><script src="js/ocorrencias.js"></script><script src="js/ranking.js"></script>
+</body>
+</html>
