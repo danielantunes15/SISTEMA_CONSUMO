@@ -1,54 +1,80 @@
 window.cavalosModule = (function() {
-    let cavalos = []; // Variável global restaurada para o app.js não dar erro
+    let cavalos = []; // Variável global para manter o app.js funcionando
 
     // Função principal que carrega e processa os dados
-    async function loadRanking() {
+    async function loadCavalos() {
         try {
-            // 1. PRIMEIRO: Busca TODOS os cavalos cadastrados (para não faltar nenhum)
+            // 1. Busca todos os cavalos cadastrados para obter os Conjuntos e Carretas
             const { data: cavalosData, error: errorCavalos } = await window.supabaseClient
                 .from('cavalos')
                 .select('*');
 
-            if (errorCavalos) {
-                console.error('Erro ao buscar cavalos:', errorCavalos);
-            } else if (cavalosData) {
-                cavalos = cavalosData; // Alimenta a variável global para o getAll() funcionar
+            if (!errorCavalos && cavalosData) {
+                cavalos = cavalosData;
             }
 
-            // 2. SEGUNDO: Busca as quilometragens na tabela de viagens
-            const { data: viagensData, error: errorViagens } = await window.supabaseClient
-                .from('viagens') 
-                .select('placa, distancia_km');
-
-            if (errorViagens) {
-                console.error('Erro ao buscar dados de viagens:', errorViagens);
-            }
-
-            const kmPorPlaca = {};
+            // 2. Busca as viagens com LOOP (Paginação) para ignorar o limite de 1000 linhas do Supabase
+            let viagensData = [];
+            let from = 0;
+            const step = 1000;
             
-            // 3. TERCEIRO: Garante que todos os cavalos cadastrados apareçam na lista (começando com 0 km)
+            while (true) {
+                const { data, error } = await window.supabaseClient
+                    .from('viagens')
+                    .select('placa, distancia_km')
+                    .range(from, from + step - 1);
+                
+                if (error) {
+                    console.error('Erro ao buscar viagens:', error);
+                    break;
+                }
+                
+                if (data && data.length > 0) {
+                    viagensData = viagensData.concat(data);
+                }
+                
+                // Se retornar menos de 1000 itens, significa que chegou no fim do banco de dados
+                if (!data || data.length < step) {
+                    break;
+                }
+                
+                from += step;
+            }
+
+            const stats = {};
+            
+            // 3. Preenche a lista inicialmente com todos os Cavalos cadastrados (mesmo os com 0 KM)
             cavalos.forEach(c => {
                 if (c.placa) {
-                    kmPorPlaca[c.placa] = 0;
+                    const carretas = [c.carreta1, c.carreta2, c.carreta3].filter(x => x && x.trim() !== '').join(' / ');
+                    stats[c.placa] = {
+                        placa: c.placa,
+                        conjunto: c.conjunto || 'S/N',
+                        carretas: carretas || 'Sem carretas',
+                        kmTotal: 0
+                    };
                 }
             });
 
-            // 4. QUARTO: Soma os KMs por placa baseados nas viagens
-            (viagensData || []).forEach(item => {
-                const placa = item.placa || 'NÃO IDENTIFICADO'; 
+            // 4. Soma a quilometragem lida de todas as viagens
+            viagensData.forEach(item => {
+                const placa = item.placa || 'NÃO IDENTIFICADO';
                 const km = parseFloat(item.distancia_km) || 0;
-
-                // Se houver uma placa na viagem que não estava cadastrada nos cavalos, adiciona também
-                if (kmPorPlaca[placa] === undefined) {
-                    kmPorPlaca[placa] = 0;
+                
+                // Se o caminhão fez viagem mas não estava na tabela de cavalos, adicionamos agora
+                if (!stats[placa]) {
+                    stats[placa] = {
+                        placa: placa,
+                        conjunto: 'S/N',
+                        carretas: 'Sem carretas vinculadas',
+                        kmTotal: 0
+                    };
                 }
-                kmPorPlaca[placa] += km;
+                stats[placa].kmTotal += km;
             });
 
             // 5. Converte em array e ordena do maior para o menor
-            const ranking = Object.keys(kmPorPlaca)
-                .map(placa => ({ placa, kmTotal: kmPorPlaca[placa] }))
-                .sort((a, b) => b.kmTotal - a.kmTotal);
+            const ranking = Object.values(stats).sort((a, b) => b.kmTotal - a.kmTotal);
 
             // Prepara os dados para o Gráfico
             const placas = ranking.map(r => r.placa);
@@ -66,7 +92,7 @@ window.cavalosModule = (function() {
     }
 
     // ==========================================
-    // GRÁFICO ECHARTS MELHORADO
+    // GRÁFICO ECHARTS
     // ==========================================
     function renderChart(placas, kms) {
         const chartDiv = document.getElementById('rankingKmChart');
@@ -91,14 +117,14 @@ window.cavalosModule = (function() {
             },
             grid: { left: '2%', right: '4%', bottom: '22%', containLabel: true },
             
-            // BARRA DE ROLAGEM INFERIOR (Deixa o gráfico perfeito mesmo com dezenas de caminhões)
+            // BARRA DE ROLAGEM INFERIOR (Inteligente para frotas grandes)
             dataZoom: [
                 {
                     type: 'slider',
                     show: true,
                     xAxisIndex: [0],
                     start: 0,
-                    end: placas.length > 15 ? 40 : 100, // Mostra só os primeiros se tiver muitos
+                    end: placas.length > 15 ? 40 : 100,
                     bottom: 0,
                     textStyle: { color: '#94a3b8' },
                     borderColor: '#334155',
@@ -110,7 +136,7 @@ window.cavalosModule = (function() {
                 data: placas, 
                 axisLabel: { 
                     interval: 0, 
-                    rotate: 45, // Deixa o nome inclinado para caber
+                    rotate: 45, 
                     color: '#94a3b8', 
                     fontSize: 11 
                 },
@@ -126,7 +152,7 @@ window.cavalosModule = (function() {
             series: [{
                 name: 'KM Rodados', 
                 type: 'bar', 
-                barMaxWidth: 45, // Garante que a barra não fique "gorda" demais
+                barMaxWidth: 45, // Impede que barras fiquem muito grossas
                 data: kms, 
                 itemStyle: { 
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -179,13 +205,15 @@ window.cavalosModule = (function() {
                 posStyle = 'color: #b45309; font-weight: 800; font-size: 1.1rem;';
             }
 
-            // Exibe 0 KM se não tiver valor, ou 3 casas decimais
             let kmExibicao = item.kmTotal > 0 ? utils.formatNumber(item.kmTotal, 3) : "0,000";
 
             return `
             <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); transition: background 0.2s;" onmouseover="this.style.background='rgba(51, 65, 85, 0.3)'" onmouseout="this.style.background='transparent'">
                 <td style="text-align: center; ${posStyle}">${icon}${index + 1}º</td>
-                <td style="font-weight: 600; color: #38bdf8; font-size: 1.05rem;">${item.placa}</td>
+                <td>
+                    <strong style="color: #38bdf8; font-size: 1.05rem;">${item.placa}</strong> <span style="color: #94a3b8; font-size: 0.85rem;">(${item.conjunto})</span><br>
+                    <span style="font-size: 0.75rem; color: #64748b;"><i class="fas fa-link" style="margin-right: 4px; font-size: 0.65rem;"></i>${item.carretas}</span>
+                </td>
                 <td style="text-align: right; font-weight: 600; padding-right: 20px;">
                     <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); display: inline-block; min-width: 100px; text-align: center;">
                         ${kmExibicao} KM
@@ -196,16 +224,13 @@ window.cavalosModule = (function() {
         }).join('');
     }
 
-    // ==========================================
-    // FUNÇÃO OBRIGATÓRIA PARA O APP.JS NÃO DAR ERRO
-    // ==========================================
+    // Retorna os cavalos pro app.js não quebrar no Dashboard
     function getAllCavalos() {
         return cavalos;
     }
 
-    // Exporta o que o sistema precisa
     return { 
-        load: loadRanking,
+        load: loadCavalos,
         getAll: getAllCavalos
     };
 })();
