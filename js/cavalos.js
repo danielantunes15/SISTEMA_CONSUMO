@@ -61,7 +61,6 @@ window.cavalosModule = (function() {
                 const placa = item.placa || 'NÃO IDENTIFICADO';
                 const km = parseFloat(item.distancia_km) || 0;
                 
-                // Se o caminhão fez viagem mas não estava na tabela de cavalos, adicionamos agora
                 if (!stats[placa]) {
                     stats[placa] = {
                         placa: placa,
@@ -76,9 +75,9 @@ window.cavalosModule = (function() {
             // 5. Converte em array e ordena do maior para o menor
             const ranking = Object.values(stats).sort((a, b) => b.kmTotal - a.kmTotal);
 
-            // Prepara os dados para o Gráfico
+            // ENVIA OS NÚMEROS PUROS PARA O GRÁFICO (A formatação visual é feita dentro do renderChart)
             const placas = ranking.map(r => r.placa);
-            const kms = ranking.map(r => r.kmTotal.toFixed(3));
+            const kms = ranking.map(r => r.kmTotal); 
 
             // Renderiza na tela
             renderChart(placas, kms);
@@ -110,14 +109,17 @@ window.cavalosModule = (function() {
             tooltip: { 
                 trigger: 'axis', 
                 axisPointer: { type: 'shadow' },
-                formatter: '{b}: {c} KM',
+                // Formata o Tooltip para o Padrão Brasileiro (18.548,380 KM)
+                formatter: function(params) {
+                    let valorFormatado = Number(params[0].value).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                    return `<strong>${params[0].name}</strong><br/>KM Rodados: ${valorFormatado} KM`;
+                },
                 backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 borderColor: '#334155',
                 textStyle: { color: '#f8fafc' }
             },
             grid: { left: '2%', right: '4%', bottom: '22%', containLabel: true },
             
-            // BARRA DE ROLAGEM INFERIOR (Inteligente para frotas grandes)
             dataZoom: [
                 {
                     type: 'slider',
@@ -146,13 +148,19 @@ window.cavalosModule = (function() {
                 type: 'value', 
                 name: 'Soma de Distância', 
                 nameTextStyle: { color: '#94a3b8', padding: [0, 0, 10, 0] }, 
-                axisLabel: { color: '#94a3b8' }, 
+                axisLabel: { 
+                    color: '#94a3b8',
+                    // Formata a Régua Esquerda (Eixo Y) para "15.000", "20.000" etc.
+                    formatter: function(value) {
+                        return Number(value).toLocaleString('pt-BR');
+                    }
+                }, 
                 splitLine: { lineStyle: { color: '#334155', type: 'dashed' } }
             },
             series: [{
                 name: 'KM Rodados', 
                 type: 'bar', 
-                barMaxWidth: 45, // Impede que barras fiquem muito grossas
+                barMaxWidth: 45, 
                 data: kms, 
                 itemStyle: { 
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -164,13 +172,16 @@ window.cavalosModule = (function() {
                 label: { 
                     show: true, 
                     position: 'top', 
-                    formatter: '{c}',
+                    // Formata o número em cima da barra (18.548,380)
+                    formatter: function(params) {
+                        return Number(params.value).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                    },
                     rotate: 90, 
                     align: 'left', 
                     verticalAlign: 'middle', 
                     offset: [0, -10], 
                     color: '#f8fafc', 
-                    fontSize: 10 
+                    fontSize: 11 
                 }
             }]
         };
@@ -192,7 +203,6 @@ window.cavalosModule = (function() {
         }
 
         tbody.innerHTML = ranking.map((item, index) => {
-            // Estilos de Destaque para o Top 3 (Ouro, Prata, Bronze)
             let posStyle = 'color: #94a3b8; font-weight: bold;';
             let icon = '';
 
@@ -205,7 +215,10 @@ window.cavalosModule = (function() {
                 posStyle = 'color: #b45309; font-weight: 800; font-size: 1.1rem;';
             }
 
-            let kmExibicao = item.kmTotal > 0 ? utils.formatNumber(item.kmTotal, 3) : "0,000";
+            // Formatação Padrão BR para a Tabela (ex: 18.548,380)
+            let kmExibicao = item.kmTotal > 0 
+                ? Number(item.kmTotal).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                : "0,000";
 
             return `
             <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4); transition: background 0.2s;" onmouseover="this.style.background='rgba(51, 65, 85, 0.3)'" onmouseout="this.style.background='transparent'">
@@ -224,7 +237,6 @@ window.cavalosModule = (function() {
         }).join('');
     }
 
-    // Retorna os cavalos pro app.js não quebrar no Dashboard
     function getAllCavalos() {
         return cavalos;
     }
