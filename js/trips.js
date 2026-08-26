@@ -334,6 +334,10 @@ window.tripsModule = (function() {
                     if (temColunaTransp || temColunaCarreg) {
                         if (!transp.includes('SERRANALOG') && !carreg.includes('SERRANALOG')) return false;
                     }
+
+                    // AQUI ESTÁ A REGRA DE EXCLUSÃO DE MÉDIAS ACIMA DE 2.70
+                    const kml = trip['Km/l'];
+                    if (kml > 2.70) return false;
                     
                     return true;
                 });
