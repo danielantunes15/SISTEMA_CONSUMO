@@ -175,7 +175,7 @@ window.tripsModule = (function() {
             placa: t.placa,
             distancia_km: t['Distância (Km)'],
             kml: t['Km/l'],
-            total_litros: t['Total Litros Consumido'],
+            total_litros: t['Litros Consumidos'],
             inicio: t.inicio,
             fim: t.fim
         }));
@@ -298,7 +298,7 @@ window.tripsModule = (function() {
                 let rawTrips = jsonData.map(row => {
                     const kmlValue = row['Km/L'] || row['Km/l'] || row['KM/L'] || row['km/l'] || 0;
                     const distanciaValue = row['Distância (Km)'] || row['Distancia (Km)'] || row['distância (km)'] || 0;
-                    const litrosValue = row['Total Litros Consumido'] || row['total litros consumido'] || 0;
+                    const litrosValue = row['Litros Consumidos'] || row['Litros Consumidos'] || 0;
                     const dataInicioRaw = row.Início || row.inicio || row['Data Inicial'] || row['Dt Início'];
                     const dataFimRaw = row.Fim || row.fim || row['Data Fim'] || row['Dt Fim Descar Fáb'];
                     const placaValue = row.Placa || row.placa || row['Veículo'] || row['Equipamento'] || row.Cavalo || row.cavalo || row.Frota || null;
@@ -307,7 +307,7 @@ window.tripsModule = (function() {
                         placa: placaValue,
                         'Distância (Km)': parseExcelNumber(distanciaValue),
                         'Km/l': parseKML(kmlValue),
-                        'Total Litros Consumido': parseExcelNumber(litrosValue),
+                        'Litros Consumidos': parseExcelNumber(litrosValue),
                         inicio: parseDateString(dataInicioRaw),
                         fim: parseDateString(dataFimRaw),
                         Transportador: row['Transportador'] || row['Transportadora'],
