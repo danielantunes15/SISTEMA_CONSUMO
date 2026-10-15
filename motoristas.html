@@ -16,17 +16,22 @@
             <div class="content-area">
                 <div class="table-card full-width">
                     
-                    <!-- BARRA SUPERIOR (TÍTULO, BUSCA E BOTÃO NOVO) -->
+                    <!-- BARRA SUPERIOR (TÍTULO, BUSCA E BOTÃO NOVO E DUPLICADOS) -->
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                         <h3 style="margin: 0;"><i class="fas fa-address-card"></i> Cadastro de Motoristas</h3>
                         
-                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <!-- CAMPO DE BUSCA -->
-                            <div style="position: relative; min-width: 250px;">
+                            <div style="position: relative; min-width: 200px;">
                                 <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b;"></i>
                                 <input type="text" id="search-driver" onkeyup="window.driversModule.filterDrivers()" placeholder="Buscar por nome..." class="form-control filter-input" style="width: 100%; padding-left: 36px;">
                             </div>
                             
+                            <!-- BOTÃO DE BUSCAR DUPLICADOS -->
+                            <button class="btn-secondary" onclick="window.driversModule.openDuplicatesModal()">
+                                <i class="fas fa-users-slash"></i> Buscar Duplicados
+                            </button>
+
                             <button class="btn-primary" onclick="window.driversModule.openModal()">
                                 <i class="fas fa-plus"></i> Novo Motorista
                             </button>
@@ -54,7 +59,7 @@
         </main>
     </div>
 
-    <!-- Modal Específico desta página -->
+    <!-- Modal de Novo/Editar Motorista -->
     <div id="driver-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -88,6 +93,25 @@
                         <button type="submit" class="btn-primary">Salvar</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO MODAL: Painel de Motoristas Duplicados -->
+    <div id="duplicates-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2 style="color: #f8fafc;"><i class="fas fa-users-slash" style="color: #fbbf24;"></i> Gerenciar Nomes Parecidos</h2>
+                <button class="modal-close" onclick="window.driversModule.closeDuplicatesModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+                <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;">
+                    O sistema analisou a sua base de dados e encontrou motoristas com <strong>nomes muito semelhantes</strong> ou contidos uns nos outros. 
+                    Avalie os grupos abaixo e exclua as variações incorretas para manter seu cadastro unificado.
+                </p>
+                <div id="duplicates-list">
+                    <!-- Os nomes parecidos serão injetados aqui -->
+                </div>
             </div>
         </div>
     </div>

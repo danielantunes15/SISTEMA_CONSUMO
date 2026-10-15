@@ -21,6 +21,11 @@ window.showDisqReason = function(type, driver, payload) {
 
 window.auditoriaModule = (function() {
 
+    function normalizeStr(str) {
+        if (!str) return '';
+        return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    }
+
     function getCycleInfo() {
         const s = window.settingsModule ? window.settingsModule.get() : {};
         return { startDay: s.cicloInicio || 26, endDay: s.cicloFim || 25 };
@@ -109,29 +114,44 @@ window.auditoriaModule = (function() {
             selectedMonth = filterSelect.value;
         }
 
-        const { startDay, endDay } = getCycleInfo();
-        const [selYear, selMonth] = selectedMonth.split('-');
         const DISTANCIA_MINIMA_QUALIFICACAO = 1000; 
         
-        const currentMonthTrips = allTrips.filter(t => {
-            if(!t.inicio) return false;
-            return isDateInCycle(t.inicio, parseInt(selYear), parseInt(selMonth), startDay, endDay);
-        });
+        let currentMonthTrips = [];
+        let currentMonthOcorrencias = [];
+        let cicloTexto = "Todos os Meses (Global)";
 
-        const currentMonthOcorrencias = ocorrencias.filter(oc => {
-            if(!oc.data) return false;
-            return isDateInCycle(oc.data + 'T00:00:00', parseInt(selYear), parseInt(selMonth), startDay, endDay);
-        });
+        if (selectedMonth === 'all') {
+            currentMonthTrips = allTrips;
+            currentMonthOcorrencias = ocorrencias;
+        } else {
+            const { startDay, endDay } = getCycleInfo();
+            const [selYear, selMonth] = selectedMonth.split('-');
+            cicloTexto = `Ciclo de ${formatMonthStr(selectedMonth)}`;
+
+            currentMonthTrips = allTrips.filter(t => {
+                if(!t.inicio) return false;
+                return isDateInCycle(t.inicio, parseInt(selYear), parseInt(selMonth), startDay, endDay);
+            });
+
+            currentMonthOcorrencias = ocorrencias.filter(oc => {
+                if(!oc.data) return false;
+                return isDateInCycle(oc.data + 'T00:00:00', parseInt(selYear), parseInt(selMonth), startDay, endDay);
+            });
+        }
 
         const driversStats = drivers.map(driver => {
-            const dTrips = currentMonthTrips.filter(t => t.motorista === driver.name);
+            const driverNorm = normalizeStr(driver.name);
+            
+            // FILTRO INTELIGENTE: Liga a viagem ao motorista
+            const dTrips = currentMonthTrips.filter(t => normalizeStr(t.motorista) === driverNorm);
+            
             let dist = 0; let fuel = 0;
             dTrips.forEach(t => {
                 dist += parseFloat(t.distancia_km) || 0;
                 fuel += parseFloat(t.total_litros) || 0;
             });
             const kml = fuel > 0 ? dist / fuel : 0;
-            const ocorrencia = currentMonthOcorrencias.find(oc => oc.motorista === driver.name);
+            const ocorrencia = currentMonthOcorrencias.find(oc => normalizeStr(oc.motorista) === driverNorm);
             
             return { ...driver, calc_distance: dist, calc_kml: kml, ocorrencia_detalhes: ocorrencia };
         });
@@ -157,22 +177,27 @@ window.auditoriaModule = (function() {
         const detailsContainer = document.getElementById('auditoria-details-section');
         if (!detailsContainer) return;
 
+        let optionsHtml = `<option value="all" ${selectedMonth === 'all' ? 'selected' : ''}>Todos os Meses (Geral)</option>`;
+        availableMonths.forEach(m => {
+            optionsHtml += `<option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${formatMonthStr(m)}</option>`;
+        });
+
         let detailsHtml = `
             <div class="table-card full-width" style="border-top: 4px solid #3b82f6; background: #1e293b;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                     <div>
-                        <h3 style="color: #38bdf8; margin-bottom: 8px;"><i class="fas fa-calculator"></i> Prestação de Contas (Ciclo)</h3>
+                        <h3 style="color: #38bdf8; margin-bottom: 8px;"><i class="fas fa-calculator"></i> Prestação de Contas (${selectedMonth === 'all' ? 'Geral' : 'Ciclo'})</h3>
                         <p style="color: #94a3b8; font-size: 0.85rem; line-height: 1.6;">
                             <strong>Regra:</strong> Desempenho KML (Peso 70%) + Desempenho Distância (Peso 30%) = Máx 1000 Pontos<br>
-                            <strong>Melhores Marcas do Ciclo:</strong> KM/L = ${utils.formatNumber(maxKML)} | Distância = ${utils.formatNumber(maxDistance, 0)} km<br>
-                            <strong>Trava de Qualificação:</strong> Mínimo de ${DISTANCIA_MINIMA_QUALIFICACAO} km rodados.
+                            <strong>Melhores Marcas (Amostra):</strong> KM/L = ${utils.formatNumber(maxKML)} | Distância = ${utils.formatNumber(maxDistance, 0)} km<br>
+                            <strong>Trava de Qualificação:</strong> Mínimo de ${DISTANCIA_MINIMA_QUALIFICACAO} km rodados na competência selecionada.
                         </p>
                     </div>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <label style="color: #94a3b8; font-weight: 600; font-size: 0.9rem;">Competência:</label>
-                            <select id="auditoria-month-filter" class="form-control filter-input" style="width: 130px; font-weight: bold; background: #0f172a;" onchange="window.auditoriaModule.render()">
-                                ${availableMonths.map(m => `<option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${formatMonthStr(m)}</option>`).join('')}
+                            <select id="auditoria-month-filter" class="form-control filter-input" style="width: 180px; font-weight: bold; background: #0f172a;" onchange="window.auditoriaModule.render()">
+                                ${optionsHtml}
                             </select>
                         </div>
                         <div style="min-width: 250px;">

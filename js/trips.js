@@ -3,6 +3,11 @@ window.tripsModule = (function() {
     let currentPageHistorico = 1;
     const itemsPerPage = 50;
 
+    function normalizeStr(str) {
+        if (!str) return '';
+        return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    }
+
     async function loadTrips(startDate = null, endDate = null) {
         utils.showAlert('<i class="fas fa-circle-notch fa-spin"></i> Sincronizando base de dados. Aguarde...', 'info');
         let allData = [];
@@ -170,15 +175,27 @@ window.tripsModule = (function() {
     }
 
     async function importFromExcel(data) {
-        const supabaseData = data.map(t => ({
-            motorista: t.motorista,
-            placa: t.placa,
-            distancia_km: t['Distância (Km)'],
-            kml: t['Km/l'],
-            total_litros: t['Litros Consumidos'],
-            inicio: t.inicio,
-            fim: t.fim
-        }));
+        const registeredDrivers = window.driversModule ? window.driversModule.getAll() : [];
+        
+        const supabaseData = data.map(t => {
+            const rawName = t.motorista || '';
+            const normName = normalizeStr(rawName);
+            
+            // INTELIGÊNCIA DE IMPORTAÇÃO: Procura se o nome importado bate com o de algum motorista cadastrado 
+            // ignorando acentos. Se bater, substitui pelo nome idêntico ao do cadastro para não criar duplicatas!
+            const matchedDriver = registeredDrivers.find(d => normalizeStr(d.name) === normName);
+            const finalName = matchedDriver ? matchedDriver.name : rawName.trim().toUpperCase();
+
+            return {
+                motorista: finalName,
+                placa: t.placa,
+                distancia_km: t['Distância (Km)'],
+                kml: t['Km/l'],
+                total_litros: t['Total Litros Consumido'],
+                inicio: t.inicio,
+                fim: t.fim
+            };
+        });
         
         utils.showAlert(`<i class="fas fa-cloud-upload-alt"></i> Salvando ${supabaseData.length} viagens. Por favor, aguarde...`, 'info');
         
@@ -188,7 +205,6 @@ window.tripsModule = (function() {
         for (let i = 0; i < supabaseData.length; i += batchSize) {
             const batch = supabaseData.slice(i, i + batchSize);
             
-            // Alterado de .insert para .upsert para lidar com as duplicatas de forma inteligente
             const { error } = await window.supabaseClient
                 .from('viagens')
                 .upsert(batch, { onConflict: 'motorista,inicio', ignoreDuplicates: true });
@@ -202,7 +218,7 @@ window.tripsModule = (function() {
         if (hasError) {
             utils.showAlert('Ocorreu um erro ao importar alguns lotes para o banco de dados.', 'error');
         } else {
-            await loadTrips(); // Removido recarregamento mensal, carrega tudo após importação
+            await loadTrips(); 
             updateDriverStats();
             utils.showAlert(`<i class="fas fa-check-double"></i> Viagens processadas com sucesso! Duplicadas foram ignoradas.`, 'success');
         }
@@ -216,7 +232,10 @@ window.tripsModule = (function() {
 
     function getAllTrips() { return trips; }
     
-    function getDriverTrips(driverName) { return trips.filter(t => t.motorista === driverName); }
+    function getDriverTrips(driverName) { 
+        const normName = normalizeStr(driverName);
+        return trips.filter(t => normalizeStr(t.motorista) === normName); 
+    }
     
     function setupUpload() {
         const uploadArea = document.getElementById('uploadArea');
@@ -298,16 +317,20 @@ window.tripsModule = (function() {
                 let rawTrips = jsonData.map(row => {
                     const kmlValue = row['Km/L'] || row['Km/l'] || row['KM/L'] || row['km/l'] || 0;
                     const distanciaValue = row['Distância (Km)'] || row['Distancia (Km)'] || row['distância (km)'] || 0;
-                    const litrosValue = row['Litros Consumidos'] || row['Litros Consumidos'] || 0;
+                    
+                    // Tratamento para ler tanto Total Litros quanto Litros Consumidos (arquivos CSV)
+                    const litrosValue = row['Total Litros Consumido'] || row['total litros consumido'] || row['Litros Consumidos'] || row['litros consumidos'] || 0;
+                    
                     const dataInicioRaw = row.Início || row.inicio || row['Data Inicial'] || row['Dt Início'];
                     const dataFimRaw = row.Fim || row.fim || row['Data Fim'] || row['Dt Fim Descar Fáb'];
                     const placaValue = row.Placa || row.placa || row['Veículo'] || row['Equipamento'] || row.Cavalo || row.cavalo || row.Frota || null;
+                    
                     return {
                         motorista: row.Motorista || row.motorista,
                         placa: placaValue,
                         'Distância (Km)': parseExcelNumber(distanciaValue),
                         'Km/l': parseKML(kmlValue),
-                        'Litros Consumidos': parseExcelNumber(litrosValue),
+                        'Total Litros Consumido': parseExcelNumber(litrosValue),
                         inicio: parseDateString(dataInicioRaw),
                         fim: parseDateString(dataFimRaw),
                         Transportador: row['Transportador'] || row['Transportadora'],
@@ -335,7 +358,6 @@ window.tripsModule = (function() {
                         if (!transp.includes('SERRANALOG') && !carreg.includes('SERRANALOG')) return false;
                     }
 
-                    // AQUI ESTÁ A REGRA DE EXCLUSÃO DE MÉDIAS ACIMA DE 2.70
                     const kml = trip['Km/l'];
                     if (kml > 2.70) return false;
                     

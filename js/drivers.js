@@ -21,8 +21,10 @@ window.driversModule = (function() {
             if (rhError) return;
             if (!rhDrivers || rhDrivers.length === 0) return;
 
-            const { data: localDrivers } = await window.supabaseClient.from('motoristas').select('name');
-            // Padroniza os nomes que já estão no banco local para não duplicar
+            // Busca motoristas locais trazendo também o CPF para cruzar os dados
+            const { data: localDrivers } = await window.supabaseClient.from('motoristas').select('id, name, cpf');
+            
+            const localCpfs = (localDrivers || []).map(d => (d.cpf || '').replace(/\D/g, '')).filter(c => c.length > 0);
             const localNames = (localDrivers || []).map(d => normalizeStr(d.name));
 
             const newDrivers = [];
@@ -31,10 +33,17 @@ window.driversModule = (function() {
             for (let rh of rhDrivers) {
                 const rawName = rh.nome || '';
                 const rhNameNorm = normalizeStr(rawName);
+                const rhCpf = (rh.cpf || '').replace(/\D/g, '');
                 
-                if (rhNameNorm && !localNames.includes(rhNameNorm) && !addedInThisBatch.includes(rhNameNorm)) {
+                // Valida duplicidade usando as características (CPF ou Nome)
+                let exists = false;
+                if (rhCpf && localCpfs.includes(rhCpf)) exists = true;
+                if (rhNameNorm && localNames.includes(rhNameNorm)) exists = true;
+                if (rhNameNorm && addedInThisBatch.includes(rhNameNorm)) exists = true;
+
+                if (!exists && rhNameNorm) {
                     newDrivers.push({
-                        name: rawName.trim().toUpperCase(), // Salva o nome sempre em maiúsculo
+                        name: rawName.trim().toUpperCase(),
                         cpf: rh.cpf || '',
                         foto: rh.foto_url || '',
                         occurrences: 0,
@@ -45,6 +54,7 @@ window.driversModule = (function() {
                         last_reset: new Date().toISOString()
                     });
                     addedInThisBatch.push(rhNameNorm);
+                    if (rhCpf) localCpfs.push(rhCpf);
                 }
             }
 
@@ -102,7 +112,6 @@ window.driversModule = (function() {
         tbody.innerHTML = displayDrivers.map(driver => {
             const driverNameNorm = normalizeStr(driver.name);
             
-            // CRUCIAL: Agora a comparação ignora acentos, espaços extras e maiúsculas/minúsculas!
             const dTrips = allTrips.filter(t => normalizeStr(t.motorista) === driverNameNorm);
             const dOcorrencias = allOcorrencias.filter(oc => normalizeStr(oc.motorista) === driverNameNorm);
             
@@ -139,7 +148,7 @@ window.driversModule = (function() {
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-primary btn-sm btn-icon" title="Editar" onclick="window.driversModule.edit(${driver.id})"><i class="fas fa-edit"></i></button>
                         <button class="btn-danger btn-sm btn-icon" style="background: #f59e0b;" title="Adicionar Ocorrência" onclick="window.driversModule.addOccurrence(${driver.id})"><i class="fas fa-exclamation-triangle"></i></button>
-                        <button class="btn-danger btn-sm btn-icon" title="Excluir" onclick="window.driversModule.delete(${driver.id})"><i class="fas fa-trash"></i></button>
+                        <button class="btn-danger btn-sm btn-icon" title="Excluir" onclick="window.driversModule.deleteDriver(${driver.id})"><i class="fas fa-trash"></i></button>
                     </div>
                 </td>
             </tr>
@@ -152,21 +161,24 @@ window.driversModule = (function() {
     }
 
     function escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
     }
 
     function openModal(driverId = null) {
+        if (typeof driverId === 'object') driverId = null;
         editingId = driverId;
+        
         const modal = document.getElementById('driver-modal');
         const title = document.getElementById('modal-title');
         const preview = document.getElementById('foto-preview');
         
-        if (driverId) {
-            const driver = drivers.find(d => d.id === driverId);
+        if (editingId) {
+            const driver = drivers.find(d => d.id === editingId);
             if (driver) {
                 document.getElementById('driver-name').value = driver.name;
                 document.getElementById('driver-cpf').value = driver.cpf;
-                document.getElementById('driver-matricula').value = driver.matricula;
+                document.getElementById('driver-matricula').value = driver.matricula || '';
                 document.getElementById('driver-foto-base64').value = driver.foto || '';
                 document.getElementById('driver-foto').value = ''; 
                 
@@ -195,14 +207,22 @@ window.driversModule = (function() {
         btn.disabled = true;
         
         const driverData = {
-            name: document.getElementById('driver-name').value.trim().toUpperCase(), // Sempre salva em maiúsculo
+            name: document.getElementById('driver-name').value.trim().toUpperCase(),
             cpf: document.getElementById('driver-cpf').value,
             matricula: document.getElementById('driver-matricula').value,
             foto: document.getElementById('driver-foto-base64').value
         };
 
         if (editingId) {
+            const oldDriver = drivers.find(d => d.id === editingId);
             await window.supabaseClient.from('motoristas').update(driverData).eq('id', editingId);
+            
+            if (oldDriver && normalizeStr(oldDriver.name) !== normalizeStr(driverData.name)) {
+                await window.supabaseClient.from('viagens')
+                    .update({ motorista: driverData.name })
+                    .ilike('motorista', oldDriver.name);
+            }
+            
             utils.showAlert('Motorista atualizado com sucesso!', 'success');
         } else {
             driverData.occurrences = 0;
@@ -219,12 +239,13 @@ window.driversModule = (function() {
         await loadDrivers();
         closeModal();
         
-        if (window.tripsModule) window.tripsModule.updateDriverStats();
+        if (window.tripsModule) await window.tripsModule.load();
+        
         btn.disabled = false;
     }
 
     async function deleteDriver(id) {
-        if (confirm('Tem certeza que deseja excluir este motorista?')) {
+        if (confirm('Tem certeza que deseja excluir este motorista? Os dados não poderão ser desfeitos.')) {
             await window.supabaseClient.from('motoristas').delete().eq('id', id);
             await loadDrivers();
             utils.showAlert('Motorista excluído!', 'success');
@@ -232,6 +253,152 @@ window.driversModule = (function() {
         }
     }
 
+    // ==========================================
+    // LÓGICA DO PAINEL DE DUPLICADOS
+    // ==========================================
+    
+    // Algoritmo matemático para medir similaridade entre strings
+    function getLevenshteinDistance(a, b) {
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+                }
+            }
+        }
+        return matrix[b.length][a.length];
+    }
+
+    function areNamesSimilar(name1, name2) {
+        const n1 = normalizeStr(name1);
+        const n2 = normalizeStr(name2);
+        if (n1 === n2) return true;
+        
+        // 1. Um nome está inteiramente contido dentro do outro (ex: JOAO SILVA e JOAO DA SILVA)
+        if (n1.includes(n2) || n2.includes(n1)) return true;
+        
+        // 2. Tolerância a pequenos erros de digitação (até 3 letras diferentes em nomes compridos)
+        const dist = getLevenshteinDistance(n1, n2);
+        if (dist <= 3 && Math.max(n1.length, n2.length) > 10) return true;
+        
+        return false;
+    }
+
+    function openDuplicatesModal() {
+        const modal = document.getElementById('duplicates-modal');
+        const listContainer = document.getElementById('duplicates-list');
+        listContainer.innerHTML = '<div style="text-align:center; color:#94a3b8; padding: 30px;"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 15px;"></i><br>Analisando nomes da base de dados...</div>';
+        modal.classList.add('active');
+
+        // Um pequeno delay apenas para a interface desenhar o modal antes do processamento pesado
+        setTimeout(() => {
+            renderDuplicatesList(listContainer);
+        }, 150);
+    }
+
+    function closeDuplicatesModal() {
+        document.getElementById('duplicates-modal').classList.remove('active');
+    }
+
+    function renderDuplicatesList(container) {
+        const groups = [];
+        const processed = new Set();
+        
+        for (let i = 0; i < drivers.length; i++) {
+            if (processed.has(drivers[i].id)) continue;
+            
+            const similarGroup = [drivers[i]];
+            for (let j = i + 1; j < drivers.length; j++) {
+                if (processed.has(drivers[j].id)) continue;
+                
+                // Se o nome for detectado como duplicado / parecido
+                if (areNamesSimilar(drivers[i].name, drivers[j].name)) {
+                    similarGroup.push(drivers[j]);
+                    processed.add(drivers[j].id);
+                }
+            }
+            // Só adiciona o grupo se houver mais de uma pessoa parecida nele
+            if (similarGroup.length > 1) {
+                groups.push(similarGroup);
+            }
+        }
+        
+        if (groups.length === 0) {
+            container.innerHTML = '<div class="alert alert-success" style="justify-content: center;"><i class="fas fa-check-circle"></i> Parabéns! Nenhum motorista com nome duplicado ou parecido foi encontrado. Seu banco de dados está limpo.</div>';
+            return;
+        }
+
+        // Pega todas as viagens para podermos calcular o KM individual de cada duplicata
+        const allTrips = window.tripsModule ? window.tripsModule.getAll() : [];
+
+        let html = '';
+        groups.forEach((group, index) => {
+            html += `<div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #334155; border-radius: 12px; padding: 15px; margin-bottom: 15px;">`;
+            html += `<h4 style="color: #fbbf24; margin-bottom: 10px; font-size: 1rem;"><i class="fas fa-users" style="margin-right: 5px;"></i> Conflito #${index + 1}</h4>`;
+            html += `<table style="width: 100%; border-collapse: collapse;">`;
+            
+            // Cabeçalho da Tabela
+            html += `
+                <thead>
+                    <tr style="border-bottom: 1px solid #334155; text-align: left; color: #94a3b8; font-size: 0.75rem; text-transform: uppercase;">
+                        <th style="padding: 8px 5px;">Nome / Cadastro</th>
+                        <th style="padding: 8px 5px;">CPF</th>
+                        <th style="padding: 8px 5px;">KM Total (Base)</th>
+                        <th style="padding: 8px 5px; text-align: right;">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            group.forEach(d => {
+                // Filtra as viagens EXATAMENTE para o nome desta duplicata
+                const dNameNorm = normalizeStr(d.name);
+                const dTrips = allTrips.filter(t => normalizeStr(t.motorista) === dNameNorm);
+                
+                let distTotal = 0;
+                dTrips.forEach(t => { 
+                    distTotal += parseFloat(t.distancia_km) || 0; 
+                });
+
+                html += `
+                <tr style="border-bottom: 1px solid rgba(51, 65, 85, 0.4);">
+                    <td style="padding: 12px 5px; color: #f8fafc; font-weight: 600; font-size: 0.95rem;">${escapeHtml(d.name)}</td>
+                    <td style="padding: 12px 5px; color: #94a3b8; font-size: 0.85rem;"><i class="fas fa-id-card"></i> ${d.cpf ? utils.formatCPF(d.cpf) : 'S/ CPF'}</td>
+                    <td style="padding: 12px 5px; color: #38bdf8; font-weight: 600; font-size: 0.90rem;">${utils.formatNumber(distTotal, 0)} km</td>
+                    <td style="padding: 12px 5px; text-align: right;">
+                        <button class="btn-danger btn-sm" onclick="window.driversModule.deleteDuplicate(${d.id})" style="padding: 6px 12px; font-size: 0.8rem;">
+                            <i class="fas fa-trash"></i> Excluir
+                        </button>
+                    </td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    async function deleteDuplicate(id) {
+        if (confirm('Tem certeza que deseja excluir esta duplicata?')) {
+            await window.supabaseClient.from('motoristas').delete().eq('id', id);
+            await loadDrivers();
+            utils.showAlert('Duplicata removida e cadastro limpo!', 'success');
+            
+            // Recarrega a lista do modal para refletir a remoção instantaneamente
+            const listContainer = document.getElementById('duplicates-list');
+            if (listContainer) renderDuplicatesList(listContainer);
+            if (window.tripsModule) window.tripsModule.updateDriverStats();
+        }
+    }
+
+    // ==========================================
+    // SISTEMA DE PONTUAÇÃO
+    // ==========================================
     async function addOccurrence(id) {
         const driver = drivers.find(d => d.id === id);
         if (driver) {
@@ -318,10 +485,14 @@ window.driversModule = (function() {
         openModal, 
         closeModal, 
         edit: openModal, 
+        deleteDriver: deleteDriver,
         delete: deleteDriver, 
         addOccurrence, 
         updateScores: updateAllScores, 
         updateDriverScore,
-        filterDrivers 
+        filterDrivers,
+        openDuplicatesModal,
+        closeDuplicatesModal,
+        deleteDuplicate
     };
 })();
